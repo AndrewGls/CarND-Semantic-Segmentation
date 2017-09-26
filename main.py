@@ -33,7 +33,17 @@ def load_vgg(sess, vgg_path):
     vgg_layer4_out_tensor_name = 'layer4_out:0'
     vgg_layer7_out_tensor_name = 'layer7_out:0'
     
-    return None, None, None, None, None
+    tf.saved_model.loader.load(sess, [vgg_tag], vgg_path)
+
+    graph = tf.get_default_graph()
+    
+    image_input = graph.get_tensor_by_name(vgg_input_tensor_name)
+    keep_prob = graph.get_tensor_by_name(vgg_keep_prob_tensor_name)
+    layer3_out = graph.get_tensor_by_name(vgg_layer3_out_tensor_name)
+    layer4_out = graph.get_tensor_by_name(vgg_layer4_out_tensor_name)
+    layer7_out = graph.get_tensor_by_name(vgg_layer7_out_tensor_name)
+    
+    return image_input, keep_prob, layer3_out, layer4_out, layer7_out
 tests.test_load_vgg(load_vgg, tf)
 
 
@@ -47,7 +57,82 @@ def layers(vgg_layer3_out, vgg_layer4_out, vgg_layer7_out, num_classes):
     :return: The Tensor for the last layer of output
     """
     # TODO: Implement function
-    return None
+    
+    sigma = 0.01
+    l2_reg = 1e-3
+    
+    # 32x upsampled prediction
+    predict1_out = tf.layers.conv2d(
+                            vgg_layer7_out,
+                            num_classes,
+                            (1, 1),
+                            strides = (1, 1),
+                            padding = "same",
+                            kernel_initializer = tf.truncated_normal_initializer(stddev=sigma),
+                            kernel_regularizer = tf.contrib.layers.l2_regularizer(l2_reg),
+                            name = "prediction_x32_layer")
+    
+    # Decoder part:
+    
+    # first deconvolutional layer, 16x upsampled prediction
+    deconv1_out = tf.layers.conv2d_transpose(
+                        predict1_out,
+                        num_classes,
+                        (4, 4),
+                        strides = (2, 2),
+                        padding = "same",
+                        kernel_initializer = tf.truncated_normal_initializer(stddev=sigma),
+                        kernel_regularizer = tf.contrib.layers.l2_regularizer(l2_reg),
+                        name = "decoder1_layer")
+
+    predict2_out = tf.layers.conv2d(
+                            vgg_layer4_out,
+                            num_classes,
+                            (1, 1),
+                            strides = (1, 1),
+                            padding = "same",
+                            kernel_initializer = tf.truncated_normal_initializer(stddev=sigma),
+                            kernel_regularizer = tf.contrib.layers.l2_regularizer(l2_reg),
+                            name = "predict2_layer")
+    
+    input = tf.add(deconv1_out, predict2_out, name = "prediction_x16_layer");
+    
+    
+    # second deconvolutional layer, 8x upsampled prediction
+    deconv2_out = tf.layers.conv2d_transpose(
+                            input,
+                            num_classes,
+                            (4, 4),
+                            strides = (2, 2),
+                            padding = "same",
+                            kernel_initializer = tf.truncated_normal_initializer(stddev=sigma),
+                            kernel_regularizer = tf.contrib.layers.l2_regularizer(l2_reg),
+                            name = "decoder2_layer")
+    
+    predict3_out = tf.layers.conv2d(
+                            vgg_layer3_out,
+                            num_classes,
+                            (1, 1),
+                            strides = (1, 1),
+                            padding = "same",
+                            kernel_initializer = tf.truncated_normal_initializer(stddev=sigma),
+                            kernel_regularizer = tf.contrib.layers.l2_regularizer(l2_reg),
+                            name = "predict3_layer")
+
+    input = tf.add(deconv2_out, predict3_out, name = "prediction_x8_layer");
+    
+    # third deconvolutional layer, 1x upsampled prediction
+    deconv3_out = tf.layers.conv2d_transpose(
+                            input,
+                            num_classes,
+                            (16, 16),
+                            strides = (8, 8),
+                            padding = "same",
+                            kernel_initializer = tf.truncated_normal_initializer(stddev=sigma),
+                            kernel_regularizer = tf.contrib.layers.l2_regularizer(l2_reg),
+                            name = "decoder3_layer")
+    
+    return deconv3_out
 tests.test_layers(layers)
 
 
@@ -61,7 +146,14 @@ def optimize(nn_last_layer, correct_label, learning_rate, num_classes):
     :return: Tuple of (logits, train_op, cross_entropy_loss)
     """
     # TODO: Implement function
-    return None, None, None
+    
+    # Reshape 4D tensor to get logits as a 2D tensor where each row represents a pixel and each column a class.
+    # This allows to use standard cross entropy loss below:
+    logits = tf.reshape(nn_last_layer, (-1, num_classes))
+    cross_entropy_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=correct_label))
+    train_op = tf.train.AdamOptimizer(learning_rate = learning_rate).minimize(cross_entropy_loss)
+    
+    return logits, train_op, cross_entropy_loss
 tests.test_optimize(optimize)
 
 
@@ -109,6 +201,7 @@ def run():
         #  https://datascience.stackexchange.com/questions/5224/how-to-prepare-augment-images-for-neural-network
 
         # TODO: Build NN using load_vgg, layers, and optimize function
+        image_input, keep_prob, layer3_out, layer4_out, layer7_out = load_vgg(sess, vgg_path)
 
         # TODO: Train NN using the train_nn function
 
