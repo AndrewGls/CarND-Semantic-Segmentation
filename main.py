@@ -212,7 +212,7 @@ def run():
     # To fix GPI memory issue uncomment row, commented as "GPU memory issure".
     # The problem with GPU memory happens on Win10, Mac OS and Ubuntu platforms.
     config = tf.ConfigProto()
-    config.gpu_options.allow_growth = True  # "GPU memory issure"
+#    config.gpu_options.allow_growth = True  # "GPU memory issure"
     
 #    with tf.Session() as sess:
     with tf.Session(config=config) as sess:
