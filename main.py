@@ -174,7 +174,7 @@ def train_nn(sess, epochs, batch_size, get_batches_fn, train_op, cross_entropy_l
     """
     # TODO: Implement function
     
-    print ("Training FNC-8...")
+    print ("Training FCN-8...")
     
     for epoch in range(epochs):
         for image, label in get_batches_fn(batch_size):
@@ -208,9 +208,14 @@ def run():
     epochs = 20
     batch_size = 8
     learning_rate = 1e-4
+
+    # To fix GPI memory issue uncomment row, commented as "GPU memory issure".
+    # The problem with GPU memory happens on Win10, Mac OS and Ubuntu platforms.
+    config = tf.ConfigProto()
+    config.gpu_options.allow_growth = True  # "GPU memory issure"
     
-    
-    with tf.Session() as sess:
+#    with tf.Session() as sess:
+    with tf.Session(config=config) as sess:
         # Path to vgg model
         vgg_path = os.path.join(data_dir, 'vgg')
         # Create function to get batches
@@ -222,7 +227,7 @@ def run():
         # TODO: Build NN using load_vgg, layers, and optimize function
         correct_label = tf.placeholder(tf.float32, [None, image_shape[0], image_shape[1], num_classes])
         
-        image_input, keep_prob, vgg_layer3_out, vgg_layer4_out, vgg_layer7_out = load_vgg(sess, vgg_path)
+        input_image, keep_prob, vgg_layer3_out, vgg_layer4_out, vgg_layer7_out = load_vgg(sess, vgg_path)
         nn_last_layer = layers(vgg_layer3_out, vgg_layer4_out, vgg_layer7_out, num_classes)
         logits, train_op, cross_entropy_loss = optimize(nn_last_layer, correct_label, learning_rate, num_classes)
 
@@ -235,7 +240,7 @@ def run():
             get_batches_fn, 
             train_op, 
             cross_entropy_loss, 
-            image_input,
+            input_image,
             correct_label, 
             keep_prob, 
             learning_rate
